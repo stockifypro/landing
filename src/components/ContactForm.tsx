@@ -10,6 +10,7 @@ type FormStatus = 'idle' | 'loading' | 'success' | 'error';
 
 export default function ContactForm({ isOpen, onClose }: ContactFormProps) {
     const [status, setStatus] = useState<FormStatus>('idle');
+    const [errorMsg, setErrorMsg] = useState('');
     const overlayRef = useRef<HTMLDivElement>(null);
     const firstInputRef = useRef<HTMLInputElement>(null);
 
@@ -24,6 +25,7 @@ export default function ContactForm({ isOpen, onClose }: ContactFormProps) {
             setTimeout(() => firstInputRef.current?.focus(), 100);
         } else {
             setStatus('idle');
+            setErrorMsg('');
         }
         return () => {
             document.removeEventListener('keydown', handleKeyDown);
@@ -38,17 +40,41 @@ export default function ContactForm({ isOpen, onClose }: ContactFormProps) {
     const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
         e.preventDefault();
         setStatus('loading');
+        setErrorMsg('');
+
         const form = e.currentTarget;
         const formData = new FormData(form);
+
+        // Construir JSON con todos los campos
+        const data = {
+            name: formData.get('name') as string,
+            company: formData.get('company') as string,
+            email: formData.get('email') as string,
+            phone: formData.get('phone') as string,
+            website: formData.get('website') as string,
+            message: formData.get('message') as string,
+        };
+
         try {
-            const response = await fetch('/', {
+            const response = await fetch('/api/contact', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-                body: new URLSearchParams(formData as unknown as Record<string, string>).toString(),
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(data),
             });
-            if (response.ok) { setStatus('success'); form.reset(); }
-            else setStatus('error');
-        } catch { setStatus('error'); }
+
+            const result = await response.json();
+
+            if (response.ok) {
+                setStatus('success');
+                form.reset();
+            } else {
+                setStatus('error');
+                setErrorMsg(result.error || 'Error al enviar. Inténtalo de nuevo.');
+            }
+        } catch {
+            setStatus('error');
+            setErrorMsg('Error de conexión. Comprueba tu internet e inténtalo de nuevo.');
+        }
     };
 
     if (!isOpen) return null;
@@ -95,13 +121,11 @@ export default function ContactForm({ isOpen, onClose }: ContactFormProps) {
                         {status === 'error' && (
                             <div className="mb-4 p-3 bg-red-500/10 border border-red-500/20 rounded-xl flex items-center gap-2 text-red-400 text-sm animate-fade-in">
                                 <AlertCircle className="h-4 w-4 flex-shrink-0" />
-                                <span>Error al enviar. Inténtalo de nuevo.</span>
+                                <span>{errorMsg}</span>
                             </div>
                         )}
 
-                        <form name="contact" method="POST" data-netlify="true" netlify-honeypot="bot-field" onSubmit={handleSubmit}>
-                            <input type="hidden" name="form-name" value="contact" />
-                            <p className="hidden"><label>No rellenar: <input name="bot-field" /></label></p>
+                        <form onSubmit={handleSubmit}>
                             <div className="space-y-3.5">
                                 <div>
                                     <label htmlFor="contact-name" className="block text-xs font-medium text-gray-400 mb-1.5">Nombre completo</label>
